@@ -51,6 +51,9 @@
   .toggle { display: inline-flex; gap: 6px; margin-top: 16px; }
   .toggle button { font: 600 13px var(--sans); padding: 6px 12px; border-radius: 8px; cursor: pointer; border: 1px solid var(--line); background: var(--surface); color: var(--muted); }
   .toggle button.on { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+  .dir-toggle { display: flex; gap: 6px; }
+  .dir-toggle button { flex: 1; font: 600 13px var(--sans); padding: 9px 6px; border-radius: 10px; cursor: pointer; border: 1px solid var(--line); background: var(--surface); color: var(--muted); }
+  .dir-toggle button.on { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
   .spacer { height: 12px; }
 </style>
 </head>
@@ -67,8 +70,11 @@
 
   <!-- СЛОВНИК -->
   <div id="view-dict">
-    <div class="hint">Впиши данське слово, натисни «Перекласти». Обери потрібні варіанти перекладу та збережи.</div>
-    <label for="daInput" style="margin-top:0">Данське слово</label>
+    <div class="dir-toggle">
+      <button class="on" id="dir-da" onclick="setInputDir('da2uk')">Данська → Українська</button>
+      <button id="dir-uk" onclick="setInputDir('uk2da')">Українська → Данська</button>
+    </div>
+    <label for="daInput" id="labelSource" style="margin-top:14px">Данське слово</label>
     <input id="daInput" placeholder="напр. hyggelig" autocomplete="off" autocapitalize="none" onkeydown="if(event.key==='Enter')doTranslate()" />
     <div class="spacer"></div>
     <button class="btn primary" id="translateBtn" onclick="doTranslate()">Перекласти</button>
@@ -77,9 +83,9 @@
       <div class="card">
         <div style="display:flex; align-items:center; justify-content:space-between;">
           <span id="resultDa" class="word-da"></span>
-          <button class="spk" onclick="speak(lastTranslated)" title="Прослухати">🔊</button>
+          <button class="spk" onclick="speakResultDanish()" title="Прослухати данською">🔊</button>
         </div>
-        <label for="ukInput">Переклад українською</label>
+        <label for="ukInput" id="labelTarget">Переклад українською</label>
         <input id="ukInput" placeholder="переклад" />
         <div id="variantChips" class="chips"></div>
         <div class="spacer"></div>
@@ -123,6 +129,7 @@
   var deck = load();
   var tab = "dict";
   var dir = "da2uk";
+  var inputDir = "da2uk";
   var lastTranslated = "";
   var queue = null, revealed = false;
 
@@ -149,6 +156,31 @@
   }
   function speakWord(id) { var c = deck.find(function (x) { return x.id === id; }); if (c) speak(c.da); }
   function speakCurrent() { if (queue && queue.length) { var c = deck.find(function (x) { return x.id === queue[0]; }); if (c) speak(c.da); } }
+  function speakResultDanish() {
+    if (inputDir === "da2uk") speak(lastTranslated);
+    else speak(document.getElementById("ukInput").value);
+  }
+
+  // ── Напрямок перекладу ─────────────────────────────────────────
+  function setInputDir(d) {
+    inputDir = d;
+    document.getElementById("dir-da").className = d === "da2uk" ? "on" : "";
+    document.getElementById("dir-uk").className = d === "uk2da" ? "on" : "";
+    var inp = document.getElementById("daInput");
+    if (d === "da2uk") {
+      document.getElementById("labelSource").textContent = "Данське слово";
+      document.getElementById("labelTarget").textContent = "Переклад українською";
+      inp.placeholder = "напр. hyggelig";
+    } else {
+      document.getElementById("labelSource").textContent = "Українське слово";
+      document.getElementById("labelTarget").textContent = "Переклад данською";
+      inp.placeholder = "напр. затишний";
+    }
+    document.getElementById("result").style.display = "none";
+    inp.value = "";
+    document.getElementById("ukInput").value = "";
+    document.getElementById("variantChips").innerHTML = "";
+  }
 
   // ── Кілька варіантів перекладу (з MyMemory) ────────────────────
   function extractVariants(data, word, primary) {
@@ -170,8 +202,8 @@
   }
 
   // ── Синоніми з двомовного словника Google (без ключа) ──────────
-  async function fetchGoogleDict(word) {
-    var url = "https://translate.googleapis.com/translate_a/single?client=gtx&dj=1&sl=da&tl=uk&dt=t&dt=bd&q=" + encodeURIComponent(word);
+  async function fetchGoogleDict(word, sl, tl) {
+    var url = "https://translate.googleapis.com/translate_a/single?client=gtx&dj=1&sl=" + sl + "&tl=" + tl + "&dt=t&dt=bd&q=" + encodeURIComponent(word);
     var r = await fetch(url);
     var d = await r.json();
     var primary = "";
@@ -201,9 +233,11 @@
     lastTranslated = da;
     var variants = [];
     try {
-      var mmUrl = "https://api.mymemory.translated.net/get?q=" + encodeURIComponent(da) + "&langpair=da|uk";
+      var sl = inputDir === "da2uk" ? "da" : "uk";
+      var tl = inputDir === "da2uk" ? "uk" : "da";
+      var mmUrl = "https://api.mymemory.translated.net/get?q=" + encodeURIComponent(da) + "&langpair=" + sl + "|" + tl;
       var results = await Promise.all([
-        fetchGoogleDict(da).catch(function () { return null; }),
+        fetchGoogleDict(da, sl, tl).catch(function () { return null; }),
         fetch(mmUrl).then(function (r) { return r.json(); }).catch(function () { return null; })
       ]);
       var g = results[0], mm = results[1];
@@ -240,8 +274,11 @@
   }
 
   function saveWord() {
-    var da = (lastTranslated || document.getElementById("daInput").value).trim();
-    var uk = document.getElementById("ukInput").value.trim();
+    var src = (lastTranslated || document.getElementById("daInput").value).trim();
+    var tgt = document.getElementById("ukInput").value.trim();
+    if (!src || !tgt) return;
+    var da = inputDir === "da2uk" ? src : tgt;
+    var uk = inputDir === "da2uk" ? tgt : src;
     if (!da || !uk) return;
     var exists = deck.find(function (c) { return c.da.toLowerCase() === da.toLowerCase(); });
     if (exists) { exists.uk = uk; }
