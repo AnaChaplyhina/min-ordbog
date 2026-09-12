@@ -22,26 +22,21 @@
   .tab.active { border-color: var(--accent); background: var(--accent); color: #fff; }
   .badge { margin-left: 6px; font-size: 12px; background: var(--accent); color: #fff; border-radius: 999px; padding: 1px 7px; }
   .tab.active .badge { background: #fff; color: var(--accent); }
-  input, textarea, select { width: 100%; font-family: var(--serif); font-size: 17px; padding: 12px 13px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--ink); outline: none; }
-  select { font-family: var(--sans); font-size: 15px; -webkit-appearance: none; appearance: none; background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'><path d='M2 4l4 4 4-4' stroke='%236B7280' stroke-width='1.6' fill='none'/></svg>"); background-repeat: no-repeat; background-position: right 12px center; padding-right: 32px; }
-  input:focus, textarea:focus, select:focus { border-color: var(--accent); }
+  input { width: 100%; font-family: var(--serif); font-size: 17px; padding: 12px 13px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--ink); outline: none; }
+  input:focus { border-color: var(--accent); }
   label { font: 600 13px var(--sans); color: var(--muted); display: block; margin: 12px 0 6px 2px; }
   .btn { width: 100%; font: 600 16px var(--sans); border-radius: 12px; padding: 13px 18px; border: 1px solid transparent; cursor: pointer; transition: opacity .15s; }
   .btn:disabled { opacity: .45; cursor: default; }
   .btn.primary { background: var(--accent); color: #fff; }
   .btn.soft { background: var(--accent-soft); color: var(--accent); }
-  .btn.ghost { background: var(--surface); color: var(--ink); border: 1px solid var(--line); }
   .btn.success { background: var(--success); color: #fff; }
   .btn.again { background: #fff; color: var(--again); border: 1px solid var(--again); }
   .row { display: flex; gap: 10px; }
   .row > * { flex: 1; }
-  .grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
-  .grid3 input { font-family: var(--serif); font-size: 15px; padding: 10px; }
   .card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px; }
   .word-item { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between; }
   .word-da { font-family: var(--serif); font-size: 17px; font-weight: 600; }
   .word-uk { font-size: 14px; color: var(--muted); }
-  .tag { font: 600 12px var(--sans); color: var(--accent); margin-top: 3px; }
   .del { border: none; background: none; color: var(--muted); font-size: 18px; cursor: pointer; padding: 6px; }
   .spk { border: none; background: none; color: var(--accent); font-size: 18px; cursor: pointer; padding: 6px; line-height: 1; }
   .word-actions { display: flex; align-items: center; gap: 0; }
@@ -53,7 +48,6 @@
   .flash { min-height: 170px; display: flex; flex-direction: column; justify-content: center; text-align: center; margin-bottom: 16px; }
   .flash .front { font-family: var(--serif); font-size: 30px; font-weight: 700; }
   .flash .back { font-size: 20px; font-weight: 600; margin-top: 6px; }
-  .flash .gram { font: 600 14px var(--sans); color: var(--accent); margin-top: 10px; }
   .toggle { display: inline-flex; gap: 6px; margin-top: 16px; }
   .toggle button { font: 600 13px var(--sans); padding: 6px 12px; border-radius: 8px; cursor: pointer; border: 1px solid var(--line); background: var(--surface); color: var(--muted); }
   .toggle button.on { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
@@ -73,7 +67,7 @@
 
   <!-- СЛОВНИК -->
   <div id="view-dict">
-    <div class="hint">Впиши данське слово, натисни «Перекласти». Перевір варіанти й граматику та збережи.</div>
+    <div class="hint">Впиши данське слово, натисни «Перекласти». Обери потрібні варіанти перекладу та збережи.</div>
     <label for="daInput" style="margin-top:0">Данське слово</label>
     <input id="daInput" placeholder="напр. hyggelig" autocomplete="off" autocapitalize="none" onkeydown="if(event.key==='Enter')doTranslate()" />
     <div class="spacer"></div>
@@ -88,16 +82,6 @@
         <label for="ukInput">Переклад українською</label>
         <input id="ukInput" placeholder="переклад" />
         <div id="variantChips" class="chips"></div>
-        <label for="posSelect">Частина мови</label>
-        <select id="posSelect" onchange="renderGrammarFields()">
-          <option value="">(оберіть)</option>
-          <option value="substantiv">substantiv (іменник)</option>
-          <option value="verbum">verbum (дієслово)</option>
-          <option value="adjektiv">adjektiv (прикметник)</option>
-          <option value="adverbium">adverbium (прислівник)</option>
-          <option value="andet">andet (інше)</option>
-        </select>
-        <div id="grammarFields"></div>
         <div class="spacer"></div>
         <button class="btn success" onclick="saveWord()">Зберегти у словник</button>
       </div>
@@ -140,7 +124,6 @@
   var tab = "dict";
   var dir = "da2uk";
   var lastTranslated = "";
-  var detected = { pos: "", article: "", forms: { nutid: "", datid: "", fornutid: "" } };
   var queue = null, revealed = false;
 
   function esc(s) { return (s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
@@ -186,34 +169,27 @@
     return out.slice(0, 6);
   }
 
-  // ── Граматика з Вікісловника (best effort, без ключа) ──────────
-  async function fetchGrammar(word) {
-    var res = { pos: "", article: "", forms: { nutid: "", datid: "", fornutid: "" } };
-    try {
-      var url = "https://en.wiktionary.org/w/api.php?action=parse&page=" +
-                encodeURIComponent(word) + "&prop=text&format=json&formatversion=2&origin=*";
-      var r = await fetch(url);
-      var d = await r.json();
-      var html = (d && d.parse && d.parse.text) ? d.parse.text : "";
-      if (!html) return res;
-      var start = html.search(/id="Danish"/i);
-      if (start === -1) return res;
-      var rest = html.slice(start);
-      var nextH2 = rest.slice(60).search(/<h2[ >]/i);
-      var section = nextH2 > -1 ? rest.slice(0, nextH2 + 60) : rest;
-      if (/id="Noun/i.test(section)) res.pos = "substantiv";
-      else if (/id="Verb/i.test(section)) res.pos = "verbum";
-      else if (/id="Adjective/i.test(section)) res.pos = "adjektiv";
-      else if (/id="Adverb/i.test(section)) res.pos = "adverbium";
-      if (/common gender/i.test(section)) res.article = "en";
-      else if (/>neuter</i.test(section) || /title="neuter"/i.test(section)) res.article = "et";
-      var text = section.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
-      var m;
-      if ((m = text.match(/present tense ([^\s,)(]+)/i))) res.forms.nutid = m[1];
-      if ((m = text.match(/past tense ([^\s,)(]+)/i))) res.forms.datid = m[1];
-      if ((m = text.match(/past participle ([^\s,)(]+)/i))) res.forms.fornutid = m[1];
-    } catch (e) {}
-    return res;
+  // ── Синоніми з двомовного словника Google (без ключа) ──────────
+  async function fetchGoogleDict(word) {
+    var url = "https://translate.googleapis.com/translate_a/single?client=gtx&dj=1&sl=da&tl=uk&dt=t&dt=bd&q=" + encodeURIComponent(word);
+    var r = await fetch(url);
+    var d = await r.json();
+    var primary = "";
+    if (d && d.sentences) d.sentences.forEach(function (s) { if (s.trans) primary += s.trans; });
+    var syns = [];
+    if (d && d.dict) d.dict.forEach(function (b) { (b.terms || []).forEach(function (t) { syns.push(t); }); });
+    return { primary: primary.trim(), syns: syns };
+  }
+
+  function dedupeVariants(arr) {
+    var out = [], seen = {};
+    arr.forEach(function (s) {
+      s = (s || "").trim(); var k = s.toLowerCase();
+      if (!s || seen[k]) return;
+      if (/MYMEMORY|INVALID|PLEASE SELECT/i.test(s)) return;
+      seen[k] = 1; out.push(s);
+    });
+    return out.slice(0, 10);
   }
 
   // ── Переклад ───────────────────────────────────────────────────
@@ -223,25 +199,27 @@
     var btn = document.getElementById("translateBtn");
     btn.disabled = true; btn.textContent = "Перекладаю…";
     lastTranslated = da;
-    var uk = "", variants = [];
-    detected = { pos: "", article: "", forms: { nutid: "", datid: "", fornutid: "" } };
+    var variants = [];
     try {
-      var tUrl = "https://api.mymemory.translated.net/get?q=" + encodeURIComponent(da) + "&langpair=da|uk";
+      var mmUrl = "https://api.mymemory.translated.net/get?q=" + encodeURIComponent(da) + "&langpair=da|uk";
       var results = await Promise.all([
-        fetch(tUrl).then(function (r) { return r.json(); }).catch(function () { return null; }),
-        fetchGrammar(da)
+        fetchGoogleDict(da).catch(function () { return null; }),
+        fetch(mmUrl).then(function (r) { return r.json(); }).catch(function () { return null; })
       ]);
-      var data = results[0];
-      detected = results[1] || detected;
-      var t = (data && data.responseData) ? (data.responseData.translatedText || "") : "";
-      if (t && !/MYMEMORY|INVALID|PLEASE SELECT/i.test(t)) uk = t;
-      variants = extractVariants(data, da, uk);
+      var g = results[0], mm = results[1];
+      var all = [];
+      if (g) { if (g.primary) all.push(g.primary); g.syns.forEach(function (s) { all.push(s); }); }
+      if (mm) {
+        var t = mm.responseData ? (mm.responseData.translatedText || "") : "";
+        extractVariants(mm, da, t).forEach(function (v) { all.push(v); });
+      }
+      variants = dedupeVariants(all);
     } catch (e) {}
     btn.disabled = false; btn.textContent = "Перекласти";
 
     document.getElementById("resultDa").textContent = da;
-    document.getElementById("ukInput").value = variants[0] || uk || "";
-    if (!(variants[0] || uk)) document.getElementById("ukInput").placeholder = "Не знайдено — впиши вручну";
+    document.getElementById("ukInput").value = variants[0] || "";
+    if (!variants.length) document.getElementById("ukInput").placeholder = "Не знайдено — впиши вручну";
 
     var chips = document.getElementById("variantChips");
     var extra = variants.slice(1);
@@ -250,8 +228,6 @@
         extra.map(function (v) { return '<button class="chip" onclick="insertVariant(this.getAttribute(\'data-v\'))" data-v="' + escAttr(v) + '">' + esc(v) + '</button>'; }).join("")
       : "";
 
-    document.getElementById("posSelect").value = detected.pos || "";
-    renderGrammarFields();
     document.getElementById("result").style.display = "block";
   }
 
@@ -263,63 +239,22 @@
     }
   }
 
-  function opt(v, label, sel) { return '<option value="' + v + '"' + (sel === v ? ' selected' : '') + '>' + label + '</option>'; }
-  function field(id, label, val) { return '<div><label style="margin-top:0">' + label + '</label><input id="' + id + '" value="' + escAttr(val) + '" autocapitalize="none"></div>'; }
-
-  function currentGrammar() {
-    var v = { article: "", nutid: "", datid: "", fornutid: "" };
-    var a = document.getElementById("artSelect"); if (a) v.article = a.value;
-    var n = document.getElementById("fNutid"); if (n) v.nutid = n.value;
-    var d = document.getElementById("fDatid"); if (d) v.datid = d.value;
-    var f = document.getElementById("fFornutid"); if (f) v.fornutid = f.value;
-    return v;
-  }
-
-  function renderGrammarFields() {
-    var pos = document.getElementById("posSelect").value;
-    var cur = currentGrammar();
-    var art = cur.article || detected.article || "";
-    var forms = {
-      nutid: cur.nutid || detected.forms.nutid || "",
-      datid: cur.datid || detected.forms.datid || "",
-      fornutid: cur.fornutid || detected.forms.fornutid || ""
-    };
-    var host = document.getElementById("grammarFields");
-    if (pos === "substantiv") {
-      host.innerHTML = '<label for="artSelect">Артикль</label><select id="artSelect">' +
-        opt("", "(en / et)", art) + opt("en", "en (fælleskøn)", art) + opt("et", "et (intetkøn)", art) + '</select>';
-    } else if (pos === "verbum") {
-      host.innerHTML = '<label style="margin-bottom:6px">Форми дієслова</label><div class="grid3">' +
-        field("fNutid", "Nutid", forms.nutid) + field("fDatid", "Datid", forms.datid) + field("fFornutid", "Førnutid", forms.fornutid) + '</div>';
-    } else {
-      host.innerHTML = "";
-    }
-  }
-
   function saveWord() {
     var da = (lastTranslated || document.getElementById("daInput").value).trim();
     var uk = document.getElementById("ukInput").value.trim();
     if (!da || !uk) return;
-    var pos = document.getElementById("posSelect").value;
-    var g = currentGrammar();
-    var card = {
-      da: da, uk: uk, pos: pos,
-      article: pos === "substantiv" ? g.article : "",
-      forms: pos === "verbum" ? { nutid: g.nutid, datid: g.datid, fornutid: g.fornutid } : null
-    };
     var exists = deck.find(function (c) { return c.da.toLowerCase() === da.toLowerCase(); });
-    if (exists) {
-      exists.uk = card.uk; exists.pos = card.pos; exists.article = card.article; exists.forms = card.forms;
-    } else {
-      card.id = Date.now() + "_" + Math.random().toString(36).slice(2, 7);
-      card.box = 1; card.due = Date.now(); card.created = Date.now();
-      deck.unshift(card);
+    if (exists) { exists.uk = uk; }
+    else {
+      deck.unshift({
+        id: Date.now() + "_" + Math.random().toString(36).slice(2, 7),
+        da: da, uk: uk, box: 1, due: Date.now(), created: Date.now()
+      });
     }
     save(deck);
     document.getElementById("daInput").value = "";
     document.getElementById("ukInput").value = "";
     document.getElementById("variantChips").innerHTML = "";
-    document.getElementById("grammarFields").innerHTML = "";
     document.getElementById("result").style.display = "none";
     lastTranslated = "";
     document.getElementById("daInput").focus();
@@ -335,16 +270,6 @@
   }
 
   function dueCount() { var now = Date.now(); return deck.filter(function (c) { return c.due <= now; }).length; }
-
-  function grammarLine(c) {
-    var parts = [];
-    if (c.pos === "substantiv") parts.push(c.article ? (c.article + " · substantiv") : "substantiv");
-    else if (c.pos === "verbum") {
-      parts.push("verbum");
-      if (c.forms) { var f = [c.forms.nutid, c.forms.datid, c.forms.fornutid].filter(Boolean).join(" · "); if (f) parts.push(f); }
-    } else if (c.pos) parts.push(c.pos);
-    return parts.join("  ·  ");
-  }
 
   // ── Тренування ─────────────────────────────────────────────────
   function startSession(all) {
@@ -387,10 +312,8 @@
       header.style.display = "block"; header.textContent = "Збережені слова";
       exportWrap.style.display = "block";
       list.innerHTML = deck.map(function (c) {
-        var gl = grammarLine(c);
         return '<div class="word-item"><div><div class="word-da">' + esc(c.da) + '</div>' +
-          '<div class="word-uk">' + esc(c.uk) + '</div>' +
-          (gl ? '<div class="tag">' + esc(gl) + '</div>' : '') + '</div>' +
+          '<div class="word-uk">' + esc(c.uk) + '</div></div>' +
           '<div class="word-actions">' +
           '<button class="spk" onclick="speakWord(\'' + c.id + '\')" title="Прослухати">🔊</button>' +
           '<button class="del" onclick="deleteWord(\'' + c.id + '\')" title="Видалити">🗑</button></div></div>';
@@ -425,11 +348,9 @@
       document.getElementById("trainProgress").textContent = "Залишилось у сесії: " + queue.length;
       var front = dir === "da2uk" ? c.da : c.uk;
       var back = dir === "da2uk" ? c.uk : c.da;
-      var gl = grammarLine(c);
       var box = document.getElementById("flashBox");
       box.innerHTML = '<div class="front">' + esc(front) + '</div>' +
         (revealed ? '<div class="back">' + esc(back) + '</div>' : '') +
-        (revealed && gl ? '<div class="gram">' + esc(gl) + '</div>' : '') +
         '<div style="margin-top:12px;"><button class="spk" onclick="speakCurrent()" title="Прослухати данською">🔊</button></div>';
       var ctrl = document.getElementById("trainControls");
       ctrl.innerHTML = revealed
