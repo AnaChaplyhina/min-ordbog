@@ -99,6 +99,14 @@
     <div id="exportWrap" style="display:none; margin-top:8px;">
       <button class="btn soft" onclick="exportCsv()">Скопіювати як CSV (для Anki)</button>
     </div>
+    <div id="backupWrap" style="margin-top:14px;">
+      <div class="muted" style="font-size:13px; margin:0 2px 8px;">Резервна копія (щоб перенести між пристроями)</div>
+      <div class="row">
+        <button class="btn soft" id="backupBtn" onclick="backupExport()">Зберегти копію</button>
+        <button class="btn ghost" onclick="document.getElementById('importFile').click()">Відновити з файлу</button>
+      </div>
+      <input type="file" id="importFile" accept="application/json,.json" style="display:none" onchange="backupImport(event)" />
+    </div>
   </div>
 
   <!-- КАРТКИ -->
@@ -263,6 +271,9 @@
       : "";
 
     document.getElementById("result").style.display = "block";
+    var inp = document.getElementById("daInput");
+    inp.value = "";
+    inp.focus();
   }
 
   function insertVariant(v) {
@@ -304,6 +315,53 @@
     var csv = deck.map(function (c) { return '"' + c.da + '","' + (c.uk || "").replace(/"/g, "'") + '"'; }).join("\n");
     try { navigator.clipboard.writeText(csv); alert("Скопійовано " + deck.length + " слів."); }
     catch (e) { prompt("Скопіюй вручну:", csv); }
+  }
+
+  // ── Резервна копія (експорт/імпорт у файл) ─────────────────────
+  function backupExport() {
+    if (!deck.length) { alert("Словник порожній — нема чого зберігати."); return; }
+    var payload = { app: "slovnyk", version: 1, exported: Date.now(), deck: deck };
+    var blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url;
+    a.download = "min-ordbog-" + new Date().toISOString().slice(0, 10) + ".json";
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+  }
+
+  function backupImport(e) {
+    var file = e.target.files && e.target.files[0];
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function () {
+      try {
+        var data = JSON.parse(reader.result);
+        var incoming = Array.isArray(data) ? data : (data.deck || []);
+        if (!Array.isArray(incoming)) throw new Error("bad");
+        var existing = {};
+        deck.forEach(function (c) { existing[(c.da || "").toLowerCase()] = true; });
+        var added = 0;
+        incoming.forEach(function (c) {
+          if (!c || !c.da || !c.uk) return;
+          var k = c.da.toLowerCase();
+          if (existing[k]) return;
+          existing[k] = true;
+          deck.unshift({
+            id: Date.now() + "_" + Math.random().toString(36).slice(2, 7),
+            da: c.da, uk: c.uk,
+            box: c.box || 1, due: c.due || Date.now(), created: c.created || Date.now()
+          });
+          added++;
+        });
+        save(deck); render();
+        alert("Відновлено. Додано нових слів: " + added + ". Усього у словнику: " + deck.length + ".");
+      } catch (err) {
+        alert("Не вдалося прочитати файл. Це має бути файл копії (.json), збережений цією програмою.");
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = "";
   }
 
   function dueCount() { var now = Date.now(); return deck.filter(function (c) { return c.due <= now; }).length; }
@@ -356,6 +414,7 @@
           '<button class="del" onclick="deleteWord(\'' + c.id + '\')" title="Видалити">🗑</button></div></div>';
       }).join("");
     }
+    var bb = document.getElementById("backupBtn"); if (bb) bb.disabled = deck.length === 0;
 
     var menu = document.getElementById("trainMenu");
     var cardWrap = document.getElementById("trainCard");
