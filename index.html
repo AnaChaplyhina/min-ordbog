@@ -73,6 +73,8 @@
   .word-da { font-family: var(--serif); font-size: 17px; font-weight: 600; }
   .word-uk { font-size: 14px; color: var(--muted); }
   .del { border: none; background: none; color: var(--muted); font-size: 18px; cursor: pointer; padding: 6px; }
+  .spk { border: none; background: none; color: var(--accent); font-size: 18px; cursor: pointer; padding: 6px; line-height: 1; }
+  .word-actions { display: flex; align-items: center; gap: 0; }
   .muted { color: var(--muted); }
   .center { text-align: center; }
   .hint { font-size: 14px; color: var(--muted); line-height: 1.5; margin-bottom: 12px; }
@@ -112,8 +114,13 @@
 
     <div id="result" style="display:none; margin-top:14px;">
       <div class="card">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
+          <span id="resultDa" class="word-da"></span>
+          <button class="spk" onclick="speak(lastTranslated)" title="Прослухати">🔊</button>
+        </div>
         <label for="ukInput">Український переклад</label>
         <input id="ukInput" placeholder="переклад" />
+        <div id="resultExamples"></div>
         <div class="spacer"></div>
         <button class="btn success" onclick="saveWord()">Зберегти у словник</button>
       </div>
@@ -156,6 +163,81 @@
   var tab = "dict";
   var dir = "da2uk";
   var lastTranslated = "";
+  var lastExamples = [];
+
+  // ── Озвучення данською (Web Speech API, без ключа) ─────────────
+  var daVoice = null;
+  function pickVoice() {
+    try {
+      var vs = window.speechSynthesis ? speechSynthesis.getVoices() : [];
+      daVoice = vs.find(function (v) { return /^da([-_]|$)/i.test(v.lang); }) || null;
+    } catch (e) {}
+  }
+  if (window.speechSynthesis) {
+    pickVoice();
+    speechSynthesis.onvoiceschanged = pickVoice;
+  }
+  function speak(text) {
+    if (!text || !window.speechSynthesis) return;
+    try {
+      speechSynthesis.cancel();
+      var u = new SpeechSynthesisUtterance(text);
+      u.lang = "da-DK";
+      if (daVoice) u.voice = daVoice;
+      u.rate = 0.9;
+      speechSynthesis.speak(u);
+    } catch (e) {}
+  }
+  function speakWord(id) {
+    var c = deck.find(function (x) { return x.id === id; });
+    if (c) speak(c.da);
+  }
+  function speakCurrent() {
+    if (queue && queue.length) {
+      var c = deck.find(function (x) { return x.id === queue[0]; });
+      if (c) speak(c.da);
+    }
+  }
+
+  // ── Приклади вживання (з match-ів MyMemory) ────────────────────
+  function extractExamples(data, word) {
+    var out = [];
+    var w = (word || "").toLowerCase();
+    var matches = (data && data.matches) ? data.matches : [];
+    for (var i = 0; i < matches.length; i++) {
+      var seg = (matches[i].segment || "").trim();
+      var tr = (matches[i].translation || "").trim();
+      var segL = seg.toLowerCase();
+      if (!seg || !tr) continue;
+      if (segL === w) continue;                // не саме слово
+      if (seg.indexOf(" ") === -1) continue;   // лише фрази/речення
+      if (seg.length > 130) continue;
+      if (segL.indexOf(w) === -1) continue;    // містить слово
+      if (/MYMEMORY|INVALID|PLEASE SELECT/i.test(tr)) continue;
+      if (out.some(function (e) { return e.src.toLowerCase() === segL; })) continue;
+      out.push({ src: seg, tgt: tr });
+      if (out.length >= 3) break;
+    }
+    return out;
+  }
+  function escAttr(s) { return esc(s).replace(/"/g, "&quot;").replace(/'/g, "&#39;"); }
+  function exampleHtml(examples) {
+    if (!examples || !examples.length) return "";
+    var rows = examples.map(function (e) {
+      return '<div style="margin-top:8px; line-height:1.45;">' +
+        '<div style="font-family:var(--serif); font-size:15px;">' + esc(e.src) +
+        ' <button class="spk" style="font-size:14px; padding:1px 4px; vertical-align:middle;" ' +
+        'data-s="' + escAttr(e.src) + '" onclick="speak(this.getAttribute(\'data-s\'))">🔊</button></div>' +
+        '<div class="muted" style="font-size:13px;">' + esc(e.tgt) + '</div></div>';
+    }).join("");
+    return '<div style="margin-top:12px; border-top:1px solid var(--line); padding-top:10px;">' +
+      '<div style="font:600 12px var(--sans); color:var(--muted); margin-bottom:2px;">Приклади вживання</div>' +
+      rows + '</div>';
+  }
+  function renderExamples(elId, examples) {
+    var el = document.getElementById(elId);
+    if (el) el.innerHTML = exampleHtml(examples);
+  }
 
   // ── Переклад через MyMemory (безкоштовно, без ключа) ───────────
   async function doTranslate() {
@@ -172,10 +254,13 @@
       var data = await res.json();
       var t = data && data.responseData ? (data.responseData.translatedText || "") : "";
       if (t && !/MYMEMORY|INVALID|PLEASE SELECT/i.test(t)) uk = t;
+      lastExamples = extractExamples(data, da);
     } catch (e) {}
     btn.disabled = false; btn.textContent = "Перекласти";
     document.getElementById("ukInput").value = uk;
+    document.getElementById("resultDa").textContent = da;
     document.getElementById("result").style.display = "block";
+    renderExamples("resultExamples", lastExamples);
     if (!uk) document.getElementById("ukInput").placeholder = "Не вдалося — впиши переклад вручну";
     document.getElementById("ukInput").focus();
   }
@@ -185,11 +270,12 @@
     var uk = document.getElementById("ukInput").value.trim();
     if (!da || !uk) return;
     var exists = deck.find(function (c) { return c.da.toLowerCase() === da.toLowerCase(); });
-    if (exists) { exists.uk = uk; }
+    if (exists) { exists.uk = uk; if (lastExamples && lastExamples.length) exists.examples = lastExamples.slice(0, 3); }
     else {
       deck.unshift({
         id: Date.now() + "_" + Math.random().toString(36).slice(2, 7),
-        da: da, uk: uk, box: 1, due: Date.now(), created: Date.now()
+        da: da, uk: uk, examples: (lastExamples || []).slice(0, 3),
+        box: 1, due: Date.now(), created: Date.now()
       });
     }
     save(deck);
@@ -197,6 +283,7 @@
     document.getElementById("ukInput").value = "";
     document.getElementById("result").style.display = "none";
     lastTranslated = "";
+    lastExamples = [];
     document.getElementById("daInput").focus();
     render();
   }
@@ -279,7 +366,9 @@
       list.innerHTML = deck.map(function (c) {
         return '<div class="word-item"><div><div class="word-da">' + esc(c.da) +
           '</div><div class="word-uk">' + esc(c.uk) + '</div></div>' +
-          '<button class="del" onclick="deleteWord(\'' + c.id + '\')" title="Видалити">🗑</button></div>';
+          '<div class="word-actions">' +
+          '<button class="spk" onclick="speakWord(\'' + c.id + '\')" title="Прослухати">🔊</button>' +
+          '<button class="del" onclick="deleteWord(\'' + c.id + '\')" title="Видалити">🗑</button></div></div>';
       }).join("");
     }
 
@@ -313,8 +402,14 @@
       var front = dir === "da2uk" ? c.da : c.uk;
       var back = dir === "da2uk" ? c.uk : c.da;
       var box = document.getElementById("flashBox");
+      var exHtml = (revealed && c.examples && c.examples.length) ?
+        '<div style="margin-top:10px; line-height:1.4;">' +
+        '<div style="font-family:var(--serif); font-size:15px; color:var(--ink);">' + esc(c.examples[0].src) + '</div>' +
+        '<div class="muted" style="font-size:13px;">' + esc(c.examples[0].tgt) + '</div></div>' : '';
       box.innerHTML = '<div class="front">' + esc(front) + '</div>' +
-        (revealed ? '<div class="back">' + esc(back) + '</div>' : '');
+        (revealed ? '<div class="back">' + esc(back) + '</div>' : '') +
+        exHtml +
+        '<div style="margin-top:12px;"><button class="spk" onclick="speakCurrent()" title="Прослухати данською">🔊</button></div>';
       var ctrl = document.getElementById("trainControls");
       ctrl.innerHTML = revealed
         ? '<div class="row"><button class="btn again" onclick="grade(false)">Ще раз</button><button class="btn success" onclick="grade(true)">Знаю</button></div>'
